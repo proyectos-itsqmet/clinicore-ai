@@ -1,16 +1,3 @@
-"""
-agente.py — El agente virtual: herramientas, instrucciones y streaming.
-
-Es el mismo flujo del notebook de clase (QMS.ipynb), juntando tres partes:
-
-    celdas 20 a 28  ->  function calling: tools[] y enviar_mensajes()
-    celdas 16 a 18  ->  streaming: leer los eventos delta uno por uno
-    celda 44        ->  instructions: el rol del agente
-
-Se conservan los nombres de las funciones del notebook (agregar_mensaje,
-enviar_mensajes) para que se pueda seguir celda por celda.
-"""
-
 import json
 import os
 
@@ -18,33 +5,14 @@ from openai import OpenAI
 
 import datos
 
-# ---------------------------------------------------------------------------
-# 1. El cliente. Notebook, celda 2.
-# ---------------------------------------------------------------------------
 
-# El notebook (celda 2) creaba el cliente pasandole el proyecto del docente:
-#
-#     client = OpenAI(project="proj_GGs9WDB...")
-#
-# Aqui el proyecto es OPCIONAL y solo se envia si esta puesto en el .env.
-# Con una clave que empieza con "sk-proj-" el proyecto ya viene incluido en la
-# clave, asi que no hace falta. Y el proyecto del docente NO sirve con otra
-# clave: la API responde con error de permisos.
 PROYECTO = os.getenv("OPENAI_PROJECT") or None
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"), project=PROYECTO)
 
-# Modelos del notebook de clase. "luna" es la version mini de la familia
-# (sol = Pro, terra = normal, luna = mini) y es la que el docente recomendo
-# por precio: 0.20 USD de entrada contra 2 USD de terra.
+
 MODELO = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
 MODELO_AUDIO = os.getenv("OPENAI_TRANSCRIBE_MODEL", "gpt-4o-transcribe")
-
-
-# ---------------------------------------------------------------------------
-# 2. Las herramientas. Notebook, celda 24.
-#    Mismo formato: type, name, description, parameters.
-# ---------------------------------------------------------------------------
 
 tools = [
     {
@@ -100,10 +68,6 @@ tools = [
     },
 ]
 
-
-# Nombre de la herramienta -> funcion de datos.py que la ejecuta.
-# En el notebook esto era un "if item.name == ..." (celda 26). Con cuatro
-# herramientas, un diccionario es mas corto y mas facil de leer.
 funciones = {
     "ver_servicios": datos.ver_servicios,
     "ver_doctores": datos.ver_doctores,
@@ -111,23 +75,12 @@ funciones = {
     "ver_disponibilidad": datos.ver_disponibilidad,
 }
 
-# Texto que se le muestra al paciente mientras se ejecuta cada herramienta,
-# para que no quede esperando sin saber que pasa.
 avisos = {
     "ver_servicios": "Revisando el catalogo de servicios...",
     "ver_doctores": "Consultando los medicos...",
     "ver_sedes": "Buscando las sedes...",
     "ver_disponibilidad": "Consultando la agenda...",
 }
-
-
-# ---------------------------------------------------------------------------
-# 3. Las instrucciones del agente. Notebook, celda 44.
-#    Se arman con una funcion, y no como texto fijo, porque hay que meterle
-#    la fecha de HOY en cada consulta. Sin eso el modelo no sabe en que dia
-#    esta y ofrece turnos de meses pasados.
-# ---------------------------------------------------------------------------
-
 
 def construir_instrucciones():
     return f"""Eres el asistente virtual de ClinicORE, una clinica medica.
@@ -195,24 +148,11 @@ No pidas cedula, telefono ni direccion. No los necesitas y este chat es
 publico. Si el paciente los escribe, no los repitas en tu respuesta.
 """
 
-
-# ---------------------------------------------------------------------------
-# 4. Las funciones del notebook: agregar_mensaje y enviar_mensajes.
-#    Celdas 25 y 26.
-# ---------------------------------------------------------------------------
-
-
 def agregar_mensaje(messages, role, content):
-    """Notebook, celda 25. Igual."""
     messages.append({"role": role, "content": content})
 
 
 def ejecutar_herramienta(nombre, argumentos_json):
-    """Ejecuta una herramienta y devuelve el resultado como texto JSON.
-
-    Si algo falla se devuelve el error como dato en lugar de cortar la
-    conversacion, para que el agente pueda disculparse con el paciente.
-    """
     funcion = funciones.get(nombre)
     if funcion is None:
         return json.dumps({"error": f"No existe la herramienta {nombre}"})
@@ -222,9 +162,6 @@ def ejecutar_herramienta(nombre, argumentos_json):
     except json.JSONDecodeError:
         argumentos = {}
 
-    # El modelo suele mandar "" para los parametros que no quiere usar. Se
-    # descartan, porque un filtro con string vacio no es lo mismo que no
-    # filtrar.
     argumentos = {k: v for k, v in argumentos.items() if v not in ("", None)}
 
     try:
@@ -233,8 +170,6 @@ def ejecutar_herramienta(nombre, argumentos_json):
         return json.dumps({"error": f"No se pudo consultar el sistema: {type(e).__name__}"})
 
     if isinstance(resultado, list) and not resultado:
-        # Se dice explicitamente que vino vacio, para que el modelo no lo
-        # confunda con una falla y se invente una respuesta.
         return json.dumps({"resultados": [], "nota": "No hay resultados."},
                           ensure_ascii=False)
 
@@ -242,39 +177,22 @@ def ejecutar_herramienta(nombre, argumentos_json):
 
 
 def enviar_mensajes(messages):
-    """Notebook, celda 26 + celdas 16 a 18 (streaming).
-
-    Es un generador: va entregando ("tipo", "texto") a medida que el modelo
-    responde, en lugar de esperar la respuesta completa.
-
-    Tipos que entrega:
-        aviso  -> "Consultando la agenda..."   (para el indicador de carga)
-        texto  -> un fragmento de la respuesta (para ir escribiendo)
-        fin    -> la respuesta completa
-        error  -> algo fallo
-
-    En el notebook, enviar_mensajes() ejecutaba la herramienta y terminaba: el
-    profesor la volvia a llamar a mano en la celda 27. En un servidor no hay
-    nadie para llamarla de nuevo, asi que aqui se repite hasta 3 veces sola.
-    """
     respuesta_final = ""
 
     try:
         for _ in range(3):
-            # Misma llamada que la celda 17, mas tools y stream.
             completion = client.responses.create(
                 model=MODELO,
                 instructions=construir_instrucciones(),
                 input=messages,
                 tools=tools,
                 stream=True,
-                store=False,   # no dejar la conversacion guardada en OpenAI
+                store=False, 
             )
 
             salida = []
             hubo_texto = False
 
-            # Celda 18: leer los fragmentos uno por uno.
             for chunk in completion:
                 if chunk.type == "response.output_text.delta":
                     if chunk.delta:
@@ -285,24 +203,15 @@ def enviar_mensajes(messages):
                 elif chunk.type == "response.completed":
                     salida = list(chunk.response.output or [])
 
-            # Celda 26: "messages += completion.output"
-            #
-            # Se agregan los OBJETOS tal como vienen, no item.model_dump().
-            # El dump incluye campos de solo salida ("status", "caller",
-            # "namespace") y la API los rechaza al reenviarlos:
-            #     400 - Unknown parameter: 'input[1].status'
-            # El SDK sabe serializar los objetos dejando afuera esos campos.
             llamadas = []
             for item in salida:
                 messages.append(item)
                 if item.type == "function_call":
                     llamadas.append(item)
 
-            # Si el modelo no pidio herramientas, ya termino de responder.
             if not llamadas:
                 break
 
-            # Celda 26: ejecutar cada herramienta y guardar su resultado.
             for llamada in llamadas:
                 yield ("aviso", avisos.get(llamada.name, "Consultando..."))
 
@@ -314,8 +223,6 @@ def enviar_mensajes(messages):
                     "output": resultado,
                 })
 
-            # Si escribio algo antes de pedir la herramienta, era un preambulo
-            # ("dejame revisar..."). Se descarta para que no quede duplicado.
             if hubo_texto:
                 respuesta_final = ""
 
@@ -323,21 +230,12 @@ def enviar_mensajes(messages):
             respuesta_final = ("No pude completar la consulta. Intenta de nuevo "
                                "o comunicate con recepcion.")
             yield ("texto", respuesta_final)
-            # Solo en este caso se agrega a mano, porque el modelo no
-            # respondio nada. En el camino normal la respuesta ya quedo en el
-            # historial dentro de "completion.output": agregarla otra vez la
-            # duplicaba y el agente se leia a si mismo dos veces.
             agregar_mensaje(messages, "assistant", respuesta_final)
 
         yield ("fin", respuesta_final)
 
     except Exception as e:
         yield ("error", f"No pude procesar tu mensaje ({type(e).__name__}).")
-
-
-# ---------------------------------------------------------------------------
-# 5. Voz a texto. Notebook, celdas 32 a 35.
-# ---------------------------------------------------------------------------
 
 TIPOS_AUDIO = {
     "audio/webm": "webm",
@@ -352,12 +250,6 @@ TIPOS_AUDIO = {
 
 
 def transcribir(contenido_audio, tipo=None, nombre=None):
-    """Convierte un audio en texto. Notebook, celda 33.
-
-    En el notebook el audio se leia del disco con open("prueba.mp3", "rb").
-    Aqui llega por HTTP, asi que se le pasa la tupla (nombre, bytes, tipo)
-    que tambien acepta el SDK.
-    """
     if not contenido_audio:
         raise ValueError("El audio llego vacio.")
 

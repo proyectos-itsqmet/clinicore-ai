@@ -1,15 +1,3 @@
-"""
-probar.py — Pruebas del asistente, sin frontend.
-
-    python probar.py modelos       verifica la clave y lista los modelos
-    python probar.py datos         prueba las 4 herramientas (NO gasta tokens)
-    python probar.py chat          chat por consola, como la celda 9 del notebook
-
-Conviene correrlas en ese orden: "modelos" confirma que la clave sirve,
-"datos" confirma que el backend responde bien, y solo despues "chat" empieza
-a gastar tokens del modelo.
-"""
-
 import sys
 from datetime import date
 
@@ -17,12 +5,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-import agente   # noqa: E402
-import datos    # noqa: E402
+import agente  
+import datos   
 
 
 def probar_modelos():
-    """Verifica que la clave funcione y lista los modelos disponibles."""
+
+#! Verificae funcionamiento y listar los modelos disponibles
     print("Consultando los modelos de esta clave...\n")
     try:
         disponibles = sorted(m.id for m in agente.client.models.list())
@@ -60,8 +49,6 @@ def probar_modelos():
     print("alias del proyecto de OpenAI del docente y no existir en esta cuenta.")
 
     if agente.MODELO in faltan:
-        # Los modelos economicos son los que llevan "mini" o "nano" en el
-        # nombre, igual que explico el docente (sol/terra/luna = pro/normal/mini).
         economicos = [m for m in texto if "mini" in m or "nano" in m]
         print("\nMODELOS DE TEXTO ECONOMICOS que SI tiene esta clave:")
         for m in economicos[:12] or ["  (ninguno con 'mini' o 'nano' en el nombre)"]:
@@ -78,7 +65,8 @@ def probar_modelos():
 
 
 def probar_datos():
-    """Prueba las 4 herramientas contra el backend real. No gasta tokens."""
+
+#! Prueba en Backend
     print(f"Backend QMS: {datos.QMS_URL}")
     print(f"Hoy es:      {datos.fecha_hoy_texto()}\n")
 
@@ -164,7 +152,8 @@ def probar_datos():
 
 
 def probar_chat():
-    """Chat por consola. Notebook, celda 9 (el while True con input)."""
+
+#! Chat por consola
     print("=" * 58)
     print("  Asistente ClinicORE - prueba por consola")
     print(f"  El agente sabe que hoy es: {datos.fecha_hoy_texto()}")
