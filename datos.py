@@ -30,9 +30,19 @@ def fecha_hoy_texto():
 def consultar(ruta, params=None):
 
     params = {k: v for k, v in (params or {}).items() if v is not None}
+    
+    # Imprime la peticion que se va a hacer (forzando salida con flush=True)
+    print(f"\n[BACKEND-REQ] --> GET {ruta} | Params: {params}", flush=True)
+    
     respuesta = requests.get(f"{QMS_URL}{ruta}", params=params, timeout=10)
     respuesta.raise_for_status()
-    return respuesta.json()
+    
+    json_data = respuesta.json()
+    
+    # Imprime un resumen de la respuesta
+    print(f"[BACKEND-RES] <-- Respuesta: {str(json_data)[:300]}...\n", flush=True)
+    
+    return json_data
 
 
 def contenido(respuesta):
