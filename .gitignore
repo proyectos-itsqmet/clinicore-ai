@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.mp3
+*.webm
+*.wav
+*.m4a
+!tests/payloads/*.mp3
+!tests/payloads/*.webm
