@@ -136,20 +136,12 @@ def ver_disponibilidad(servicio=None, doctor=None, desde=None, hasta=None):
         except ValueError:
             pass
 
-    servicio_id = None
-    if servicio:
-        for s in ver_servicios():
-            if servicio.lower() in (s["nombre"] or "").lower():
-                servicio_id = s["id"]
-                break
-
     respuesta = consultar("/api/schedules", {
 
         "from": inicio.isoformat(),      
         "status": STATUS_LIBRE,         
 
         "to": fin.isoformat() if fin else None,
-        "serviceId": servicio_id,
         "doctorName": doctor,
         "size": 150,
     })
