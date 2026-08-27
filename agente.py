@@ -164,15 +164,20 @@ def ejecutar_herramienta(nombre, argumentos_json):
 
     argumentos = {k: v for k, v in argumentos.items() if v not in ("", None)}
 
+    print(f"\n[TOOL-CALL] {nombre}({argumentos})", flush=True)
+
     try:
         resultado = funcion(**argumentos)
     except Exception as e:
+        print(f"[TOOL-ERROR] {type(e).__name__}: {e}", flush=True)
         return json.dumps({"error": f"No se pudo consultar el sistema: {type(e).__name__}"})
 
     if isinstance(resultado, list) and not resultado:
+        print(f"[TOOL-RESULT] Lista vacia", flush=True)
         return json.dumps({"resultados": [], "nota": "No hay resultados."},
                           ensure_ascii=False)
 
+    print(f"[TOOL-RESULT] {len(resultado) if isinstance(resultado, list) else 1} resultados", flush=True)
     return json.dumps({"resultados": resultado}, ensure_ascii=False, default=str)
 
 
